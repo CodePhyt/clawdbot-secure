@@ -1,0 +1,65 @@
+# ============================================
+# CLAWD SECURE - ROOTLESS DOCKERFILE
+# Directive 2: Rootless Docker Execution
+# ============================================
+
+# Stage 1: Build
+FROM node:22-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
+
+# Install dependencies
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN pnpm build
+
+# ============================================
+# Stage 2: Production Runtime
+# ============================================
+
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+# Create non-root user (UID 1001)
+RUN addgroup -g 1001 -S clawdgroup && \
+    adduser -u 1001 -S clawduser -G clawdgroup
+
+# Copy built artifacts from builder
+COPY --from=builder --chown=clawduser:clawdgroup /app/dist ./dist
+COPY --from=builder --chown=clawduser:clawdgroup /app/node_modules ./node_modules
+COPY --from=builder --chown=clawduser:clawdgroup /app/package.json ./package.json
+
+# Copy runtime dependencies
+COPY --chown=clawduser:clawdgroup scripts ./scripts
+COPY --chown=clawduser:clawdgroup skills ./skills
+COPY --chown=clawduser:clawdgroup extensions ./extensions
+
+# Create data directories
+RUN mkdir -p /app/data /app/data/audit-logs && \
+    chown -R clawduser:clawdgroup /app/data
+
+# Switch to non-root user
+USER clawduser
+
+# Environment
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Expose port (binds to 127.0.0.1 in docker-compose)
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+# Start application
+CMD ["node", "dist/index.js"]

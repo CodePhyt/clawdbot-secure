@@ -2,6 +2,24 @@
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
+// ============================================
+// [CLAWD SECURE START] Security Initialization
+// ============================================
+import { securityMiddleware } from "./core/clawd-secure/middleware/security.js";
+import { initializeStorage } from "./core/clawd-secure/memory/storage.js";
+import cors from "cors";
+
+// Initialize Clawd Secure systems BEFORE any other imports/operations
+console.log('🛡️  Initializing Clawd Secure...');
+
+// Initialize encrypted storage (validates CLAWD_SECRET_KEY)
+initializeStorage();
+
+console.log('✅ Clawd Secure initialization complete');
+// ============================================
+// [CLAWD SECURE END]
+// ============================================
+
 import { getReplyFromConfig } from "./auto-reply/reply.js";
 import { applyTemplate } from "./auto-reply/templating.js";
 import { monitorWebChannel } from "./channel-web.js";
@@ -71,6 +89,9 @@ export {
   saveSessionStore,
   toWhatsappJid,
   waitForever,
+  // [CLAWD SECURE] Export security middleware
+  securityMiddleware,
+  cors,
 };
 
 const isMain = isMainModule({
